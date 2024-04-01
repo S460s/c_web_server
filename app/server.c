@@ -74,6 +74,9 @@ struct header_list *parse_header(char *header_data) {
 struct http_req *parse_req(char *data) {
   struct http_req *req = malloc(sizeof(struct http_req));
 
+  char *end_of_headers = strstr(data, "\r\n\r\n");
+  end_of_headers[4] = '\0';
+
   char *line_delim = "\r\n";
   char *saveptr_line = NULL;
   char *status_line = strtok_r(data, line_delim, &saveptr_line);
@@ -228,11 +231,11 @@ struct handler {
 };
 
 void free_handalers(struct handler *handlers[], int size) {
-  for(int i = 0; i < size; i++){
-  	struct handler *current = handlers[i];
-    	free(current->path);
-    	free(current->next);
-	free(current);
+  for (int i = 0; i < size; i++) {
+    struct handler *current = handlers[i];
+    free(current->path);
+    free(current->next);
+    free(current);
   }
   free(handlers);
 }
@@ -302,9 +305,9 @@ int main() {
   // accept loop
   char client_str[INET6_ADDRSTRLEN];
   struct handler *handlers[] = {
-          create_handler("/echo", "GET", handle_echo, 0),
-          create_handler("/user-agent", "GET", handle_useragent, 1),
-          create_handler("/", "GET", handle_root, 1)};
+      create_handler("/echo", "GET", handle_echo, 0),
+      create_handler("/user-agent", "GET", handle_useragent, 1),
+      create_handler("/", "GET", handle_root, 1)};
 
   const int handler_count = sizeof(handlers) / sizeof(handlers[0]);
 

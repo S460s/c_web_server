@@ -79,22 +79,50 @@ int handle_echo(struct http_req *req, int fd) {
 
 struct arguments arguments = {0};
 
+void print_rec(char *path) {
+  const int DIRTYPE = 4;
+  const int FILETYPE = 8;
+
+  struct dirent *dirent;
+  DIR *file_dir = opendir(path);
+
+  while ((dirent = readdir(file_dir)) != NULL) {
+    if (strcmp(dirent->d_name, ".") == 0 || strcmp(dirent->d_name, "..") == 0)
+      continue;
+
+    printf("- %s/%s\n", path, dirent->d_name);
+    if (dirent->d_type == DIRTYPE) {
+      char new_path[256];
+      snprintf(new_path, 256, "%s/%s", path, dirent->d_name);
+      print_rec(new_path);
+    }
+  }
+}
+
 int handle_dir(struct http_req *req, int fd) {
+
   struct dirent *dirent;
   DIR *file_dir = opendir(arguments.directory);
 
   // make it dynamic with the size of the contents of the directory
-  char response[800];
-  char text[700];
+  char response[800] = {0};
+  char text[700] = {0};
+
+  print_rec(arguments.directory);
 
   while ((dirent = readdir(file_dir)) != NULL) {
-    printf("DIR: %s\n", dirent->d_name);
-    sprintf(text + strlen(response), "%s", dirent->d_name);
+    if (strcmp(dirent->d_name, ".") == 0 || strcmp(dirent->d_name, "..") == 0)
+      continue;
+    char add_on[100] = "";
+    snprintf(add_on, 100, "- %s\n", dirent->d_name);
+    printf("filename: %s; type %d\n", dirent->d_name, dirent->d_type);
+    strncat(text, add_on, 700 - 1);
   }
 
-  sprintf(response,
-          "%sContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s\r\n",
-          HTTP_OK, strlen(text), text);
+  printf("TEXT: %s\n", text);
+  snprintf(response, 800,
+           "%sContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s\r\n",
+           HTTP_OK, strlen(text), text);
   unsigned int expected_bytes = strlen(HTTP_OK);
   unsigned int bytes_sent = send(fd, response, strlen(response), 0);
 

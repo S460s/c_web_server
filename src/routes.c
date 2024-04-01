@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 // TODO: put this in other file later on
 const char *argp_program_version = "v1.0.0";
@@ -124,23 +125,72 @@ int handle_dir(struct http_req *req, int fd) {
 
   return expected_bytes - bytes_sent;
 }
+/* This routine reads the entire file into memory. */
+
+static char *read_whole_file(FILE *fp) {
+  char *contents;
+  size_t bytes_read;
+  int status;
+
+  fseek(fp, 0, SEEK_END);
+  unsigned int s = ftell(fp);
+  rewind(fp);
+
+  contents = malloc(s + 1);
+  if (!contents) {
+    fprintf(stderr, "Not enough memory.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  bytes_read = fread(contents, sizeof(unsigned char), s, fp);
+  if (bytes_read != s) {
+    fprintf(stderr,
+            "Short read: expected %d bytes "
+            "but got %ld: %s.\n",
+            s, bytes_read, strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+  status = fclose(fp);
+  if (status != 0) {
+    fprintf(stderr, "Error closing %s.\n", strerror(errno));
+  }
+  return contents;
+}
 
 int handle_download_file(struct http_req *req, int fd) {
-  char *response = malloc(sizeof(char) * 300);
+#define RES_LENGTH 1400
+  char response[RES_LENGTH];
 
   char *uri_path = req->path + strlen("/files/");
   char path[256];
   snprintf(path, 256, "%s/%s", arguments.directory, uri_path);
 
+  FILE *file = fopen(path, "r");
+  if (file == NULL) {
+    char answer[256];
+    snprintf(answer, 256,
+             "No such file: <%s>, hit \"/files\" to see all files\n", path);
+
+    snprintf(response, RES_LENGTH,
+             "%sContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s\r\n",
+             HTTP_OK, strlen(answer), answer);
+
+    int expected_bytes = strlen(response);
+    int bytes_sent = send(fd, response, strlen(response), 0);
+    return expected_bytes - bytes_sent;
+  }
+
+  char *content = read_whole_file(file);
+
   sprintf(response,
           "%sContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s\r\n",
-          HTTP_OK, strlen(path), path);
+          HTTP_OK, strlen(content), content);
 
+  free(content);
   int expected_bytes = strlen(response);
   printf("[INFO] RESPONSE: %s\n", response);
 
   int bytes_sent = send(fd, response, strlen(response), 0);
-  free(response);
 
   return expected_bytes - bytes_sent;
 }

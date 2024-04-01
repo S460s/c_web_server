@@ -17,6 +17,50 @@
 
 const short BUF_SIZE = 500;
 
+#include <argp.h>
+const char *argp_program_version = "v1.0.0";
+const char *argp_prgram_bug_address = "/dev/null";
+
+static char args_doc[] = "none";
+static char doc[] = "a toy http server written in C";
+
+static struct argp_option options[] = {
+    {"verbose", 'v', 0, 0, "Produce verbose output"},
+    {"directory", 'd', "FILE", 0,
+     "Path to the directory which to use as a starting point of the server"},
+    {0}};
+
+struct arguments {
+  char *directory;
+  int verbose;
+};
+
+static error_t parse_opt(int key, char *arg, struct argp_state *state) {
+  struct arguments *arguments = state->input;
+
+  switch (key) {
+
+  case 'v':
+    arguments->verbose = 1;
+    break;
+  case 'd':
+    arguments->directory = arg;
+    break;
+  case ARGP_KEY_ARG:
+    if (state->arg_num > 0) {
+      printf("[ERROR] too many arguments\n");
+      argp_usage(state);
+    }
+    break;
+  case ARGP_KEY_END:
+    break;
+  default:
+    return ARGP_ERR_UNKNOWN;
+  }
+  return 0;
+}
+static struct argp argp = {options, parse_opt, args_doc, doc};
+
 // Since the tester restarts your program quite often, setting REUSE_PORT
 // ensures that we don't run into 'Address already in use' errors
 int free_port(int socket_fd) {
@@ -70,6 +114,11 @@ int main(int argc, char **argv) {
   setbuf(stdout, NULL);
   printf("[INFO] server %s started\n", argv[0]);
 
+  struct arguments arguments = {0};
+  argp_parse(&argp, argc, argv, 0, 0, &arguments);
+
+  printf("[INFO] directory: %s\n", arguments.directory);
+
   struct addrinfo hints;
   memset(&hints, 0, sizeof(hints)); // set all unspecified options to 0
   hints.ai_family = AF_UNSPEC;      // allow IPv4 or IPv6
@@ -88,7 +137,7 @@ int main(int argc, char **argv) {
 
   int connection_backlog = 5;
   if (listen(server_fd, connection_backlog) != 0) {
-    printf("Listen failed: %s \n", strerror(errno));
+    fprintf(stderr, "[ERROR] listen failed: %s \n", strerror(errno));
     return 1;
   }
 
@@ -101,7 +150,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "[Error] Sigacation");
   }
 
-  printf("Waiting for a client to connect...\n");
+  printf("[INFO] waiting for a client to connect...\n");
 
   struct sockaddr_in client_addr;
   unsigned int client_addr_len = sizeof(client_addr);

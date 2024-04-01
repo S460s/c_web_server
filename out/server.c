@@ -75,7 +75,7 @@ struct http_req *parse_req(char *data) {
   struct http_req *req = malloc(sizeof(struct http_req));
 
   char *end_of_headers = strstr(data, "\r\n\r\n");
-  end_of_headers[4] = '\0';
+  end_of_headers[4] = '\0'; // separate body from headers
 
   char *line_delim = "\r\n";
   char *saveptr_line = NULL;
@@ -111,7 +111,7 @@ struct http_req *parse_req(char *data) {
   }
 
   while ((header_data = strtok_r(NULL, line_delim, &header_ptr)) != NULL &&
-         strlen(header_data) > 3) { // +3 x/006 ????? TODO mistery
+         strlen(header_data) > 3) {
     struct header_list *next_header = parse_header(header_data);
     last_header->next_header = next_header;
     last_header = next_header;
@@ -119,10 +119,6 @@ struct http_req *parse_req(char *data) {
 
   return req;
 }
-
-// TODO: cleanup the response system
-// TODO: add log info about who has connected
-// TODO: use strtok_r
 
 // Since the tester restarts your program quite often, setting REUSE_PORT
 // ensures that we don't run into 'Address already in use' errors
@@ -262,9 +258,9 @@ void sigchld_handler(int s) {
   errno = save_errno;
 }
 
-int main() {
+int main(int argc, char **argv) {
   setbuf(stdout, NULL);
-  printf("[INFO] server started\n");
+  printf("[INFO] server %s started\n", argv[0]);
 
   struct addrinfo hints;
   memset(&hints, 0, sizeof(hints)); // set all unspecified options to 0

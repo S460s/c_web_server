@@ -79,7 +79,7 @@ int handle_echo(struct http_req *req, int fd) {
 
 struct arguments arguments = {0};
 
-void print_rec(char *path) {
+void get_paths(char *path, char *buffer, int TEXT_LENGTH) {
   const int DIRTYPE = 4;
   const int FILETYPE = 8;
 
@@ -91,40 +91,56 @@ void print_rec(char *path) {
       continue;
 
     printf("- %s/%s\n", path, dirent->d_name);
+    char add_on[100] = "";
+    snprintf(add_on, 100, "%s/%s\n", path, dirent->d_name);
+    strncat(buffer, add_on, TEXT_LENGTH - 1);
+
     if (dirent->d_type == DIRTYPE) {
       char new_path[256];
       snprintf(new_path, 256, "%s/%s", path, dirent->d_name);
-      print_rec(new_path);
+      get_paths(new_path, buffer, TEXT_LENGTH);
     }
   }
 }
 
 int handle_dir(struct http_req *req, int fd) {
+#define RES_LENGTH 1400
+#define TEXT_LENGTH 1000
 
   struct dirent *dirent;
   DIR *file_dir = opendir(arguments.directory);
 
   // make it dynamic with the size of the contents of the directory
-  char response[800] = {0};
-  char text[700] = {0};
+  char response[RES_LENGTH] = {0};
+  char text[TEXT_LENGTH] = {0};
 
-  print_rec(arguments.directory);
+  get_paths(arguments.directory, text, TEXT_LENGTH);
 
-  while ((dirent = readdir(file_dir)) != NULL) {
-    if (strcmp(dirent->d_name, ".") == 0 || strcmp(dirent->d_name, "..") == 0)
-      continue;
-    char add_on[100] = "";
-    snprintf(add_on, 100, "- %s\n", dirent->d_name);
-    printf("filename: %s; type %d\n", dirent->d_name, dirent->d_type);
-    strncat(text, add_on, 700 - 1);
-  }
-
-  printf("TEXT: %s\n", text);
   snprintf(response, 800,
            "%sContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s\r\n",
            HTTP_OK, strlen(text), text);
   unsigned int expected_bytes = strlen(HTTP_OK);
   unsigned int bytes_sent = send(fd, response, strlen(response), 0);
+
+  return expected_bytes - bytes_sent;
+}
+
+int handle_download_file(struct http_req *req, int fd) {
+  char *response = malloc(sizeof(char) * 300);
+
+  char *uri_path = req->path + strlen("/files/");
+  char path[256];
+  snprintf(path, 256, "%s/%s", arguments.directory, uri_path);
+
+  sprintf(response,
+          "%sContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s\r\n",
+          HTTP_OK, strlen(path), path);
+
+  int expected_bytes = strlen(response);
+  printf("[INFO] RESPONSE: %s\n", response);
+
+  int bytes_sent = send(fd, response, strlen(response), 0);
+  free(response);
 
   return expected_bytes - bytes_sent;
 }
@@ -156,37 +172,30 @@ int handle_useragent(struct http_req *req, int fd) {
   return expected_bytes - bytes_sent;
 }
 
-struct handler **add_route(struct handler **routes, struct handler *route,
-                           int *count) {
-  struct handler **new_routes = realloc(routes, sizeof(routes) + 1);
-
-  new_routes[*count] = route;
-  (*count)++;
-  return new_routes;
-}
-
 struct handler **create_routes(int *count, int argc, char **argv) {
   argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
   printf("[INFO] directory: %s\n", arguments.directory);
 
-  struct handler *routes[] = {
-      create_handler("/echo", "GET", handle_echo, 0),
-      create_handler("/user-agent", "GET", handle_useragent, 1),
-      create_handler("/", "GET", handle_root, 1)};
-
-  int route_count = sizeof(routes) / sizeof(routes[0]);
-  const int route_size = sizeof(struct handler *) * route_count;
-
-  struct handler **heap_routes = malloc(route_size);
-  memcpy(heap_routes, routes, route_size);
+  int route_count = 0;
+  // TODO: Make this dynamic later on if needed
+  struct handler *routes[32];
+  routes[route_count++] = create_handler("/echo", "GET", handle_echo, 0);
+  routes[route_count++] =
+      create_handler("/user-agent", "GET", handle_useragent, 1);
+  routes[route_count++] = create_handler("/", "GET", handle_root, 1);
 
   if (arguments.directory != NULL) {
-    add_route(heap_routes, create_handler("/files", "GET", handle_dir, 1),
-              &route_count);
+    routes[route_count++] = create_handler("/files", "GET", handle_dir, 1);
+    routes[route_count++] =
+        create_handler("/files", "GET", handle_download_file, 0);
   }
 
+  const int route_size = sizeof(struct handler *) * route_count;
+  printf("route count: %d\n", route_count);
   *count = route_count;
+  struct handler **heap_routes = malloc(route_size);
+  memcpy(heap_routes, routes, route_size);
   return heap_routes;
 }
 

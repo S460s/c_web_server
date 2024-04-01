@@ -238,6 +238,8 @@ struct handler **create_routes(int *count, int argc, char **argv) {
   if (arguments.directory != NULL) {
     routes[route_count++] = create_handler("/files", "GET", handle_dir, 1);
     routes[route_count++] =
+        create_handler("/files/", "GET", handle_dir, 1); // uhh, works as of now
+    routes[route_count++] =
         create_handler("/files", "GET", handle_download_file, 0);
   }
 

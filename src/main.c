@@ -108,8 +108,8 @@ int main(int argc, char **argv) {
 
   // accept loop
   char client_str[INET6_ADDRSTRLEN];
-  int *router_count = 0;
-  struct handler **routes = get_routes(router_count);
+  int router_count = 0;
+  struct handler **routes = get_routes(&router_count);
 
   while (1) {
     int new_fd =
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
       int not_handled = 1;
       int error = 0;
 
-      for (int i = 0; i < *router_count; i++) {
+      for (int i = 0; i < router_count; i++) {
         struct handler *handler = routes[i];
         int equal_paths =
             strncmp(req->path, handler->path, strlen(handler->path)) == 0;
@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
     close(new_fd);
   }
 
-  free_routes(routes, *router_count);
+  free_routes(routes, router_count);
   printf("[INFO] Shutting down...\n");
   return 0;
 }
